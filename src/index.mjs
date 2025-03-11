@@ -1,4 +1,6 @@
-import express, { request, response } from "express";
+import express from "express";
+import { query, validationResult, body, matchedData, checkSchema } from "express-validator";
+import { createUserValidationSchema } from "./utils/validationSchemas.mjs";
 
 const app = express();
 
@@ -42,8 +44,15 @@ app.get("/", (request, response) => {
   response.status(201).send({ msg: "Hello" });
 });
 
-app.get("/api/users", (request, response) => {
-  console.log(request.query);
+app.get("/api/users", query('filter')
+  .isString()
+  .notEmpty()
+  .withMessage("Must not be empy")
+  .isLength({ min: 3, max: 10 })
+  .withMessage("Must be at least 3-10 characters"),
+  (request, response) => {
+  const result = validationResult(request)
+  console.log(result);
   const {
     query: { filter, value },
   } = request;
@@ -55,21 +64,23 @@ app.get("/api/users", (request, response) => {
 });
 
 
+app.post("/api/users", checkSchema(createUserValidationSchema), (request, response) => {
 
-app.post("/api/users", (request, response) => {
-  const { body } = request;
+    const result = validationResult(request);
+    console.log(result)
+
+    if (!result.isEmpty())
+      return response.status(400).send({ errors: result.array() });
+
+    const data = matchedData(request);
   const newUser = { id: mockUsers[mockUsers.length - 1].id + 1, ...body };
   mockUsers.push(newUser);
   return response.status(201).send(newUser);
 });
 
-app.get("/api/users/:id", (request, response) => {
-  console.log(request.params);
-  const parsedId = parseInt(request.params.id);
-  console.log(parsedId);
-  if (isNaN(parsedId))
-    return response.status(400).send({ msg: "Bad Request. invalid ID." });
-  const findUser = mockUsers.find((user) => user.id === parsedId);
+app.get("/api/users/:id", resolveIndexByUserId, (request, response) => {
+  const { findUserIndex } = request;
+  const findUser = mockUsers[findUserIndex];
   if (!findUser) return response.sendStatus(404);
   return response.send(findUser);
 });
@@ -80,7 +91,7 @@ app.get("/api/products", (request, response) => {
 
 app.put("/api/users/:id", resolveIndexByUserId, (request, response) => {
   const { body, findUserIndex} = request;
-  mockUsers[findUserIndex] = { id: mockUsers[findUserIndex].id, ...body };
+  mockUsers[findUserIndex] = {...mockUsers[findUserIndex], ...body };
   return response.sendStatus(200);
 });
 
